@@ -1,0 +1,3 @@
+- 2026-09-25 | named_archive.xlsx | https://www.fca.org.uk/publication/data/short-positions-daily-update.xlsx | sha256:d8759660c786
+- 2026-09-25 | ansp.xlsx | https://www.fca.org.uk/publication/documents/aggregated-net-short-positions.xlsx | sha256:471b71e87e90
+- 2026-09-25 | rsl.xlsx | https://www.fca.org.uk/publication/documents/uk-reportable-shares-list.xlsx | sha256:cccc352095ee
