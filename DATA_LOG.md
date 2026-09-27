@@ -1,3 +1,9 @@
 - 2026-09-25 | named_archive.xlsx | https://www.fca.org.uk/publication/data/short-positions-daily-update.xlsx | sha256:d8759660c786
 - 2026-09-25 | ansp.xlsx | https://www.fca.org.uk/publication/documents/aggregated-net-short-positions.xlsx | sha256:471b71e87e90
 - 2026-09-25 | rsl.xlsx | https://www.fca.org.uk/publication/documents/uk-reportable-shares-list.xlsx | sha256:cccc352095ee
+- 2026-09-27 | cleaned and processed named_archive.xlsx                   | replaced the ISIN with unique latest ISIN values                   | removed suffix from position holder and name of issuer fields                   | net short position is converted into decimal values
+- 2026-09-27 | panel data is formed by taking the grouping position holder and ISIN on their month end
+- 2026-09-27 | candidate data is formed by filtering on panel data that has minimum 0.5% position
+- 2026-09-27 | positions are differentiated into active, probably closed, and definitely closed                    | if last notification from position holder is more than 12 months then it is probably inactive                     | if last notification from ISIN is less than 6 months then it is active                     | manually checked remaining uncertain status to confirm it was active
+- 2026-09-27 | panel data is differentiated into two                    | only filtering out definitely closed positions | filtering both definitely and probably closed positions
+- 2026-09-27 | aggregate view is formed by taking the aggregate of both panel data based on ISIN and month end 
