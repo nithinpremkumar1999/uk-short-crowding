@@ -1,0 +1,6 @@
+disclosure_threshold: 0.5
+dormancy_months: 12
+min_shared_holders: 2
+louvain_seed: 42
+date_end: 2026-07-10
+panel_variants: [base, strict]
