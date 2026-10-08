@@ -8,6 +8,9 @@ import pandas as pd
 import networkx as nx
 import matplotlib.pyplot as plt
 import datetime
+from scipy.cluster.hierarchy import linkage, fcluster
+from scipy.spatial.distance import squareform
+from itertools import chain
 
 
 FOLDER = "data/processed"
@@ -30,8 +33,29 @@ def build_network(m, k):
     return B, S, S2
 
 
-def build_network_row(month, m, S2, w, comms, giant):
+def core_stats(c, co, idx, S2, m):
+    """Tightness and hub measures of one core."""
+    ids = [idx[n] for n in c]
+    sub = co[np.ix_(ids, ids)]
+    mc = m[m.ISIN.isin(c)]
+    per_fund = mc.groupby("pos_holder").ISIN.nunique().sort_values(ascending=True)
+    w = [S2[u][v]["weight"] for u, v in S2.subgraph(c).edges()]
+
+    return {
+        "size": len(c),\
+        "coassign": sub[np.triu_indices(len(ids), 1)].mean(),\
+        "density": nx.density(S2.subgraph(c)),\
+        "n_funds": mc.pos_holder.nunique(),\
+        "top1_cov": per_fund.iloc[0]/len(c),\
+        "top2_cov": per_fund.iloc[1]/len(c) if len(per_fund)>1 else 0.0,\
+        "median_shared": np.median(w) if w else np.nan,
+    }
+
+
+def build_network_row(month, m, S2, w, runs, cores, stats, giant):
     """Helper function to build the network row."""
+    n_stocks = m.ISIN.nunique()
+    top = stats[0] if stats else {}
     network_row = {
         "month_end": month,\
         "n_stocks": m.ISIN.nunique(),\
@@ -43,9 +67,15 @@ def build_network_row(month, m, S2, w, comms, giant):
         "giant_density": nx.density(S2.subgraph(giant)),\
         "median_shared": np.median(w),\
         "max_shared": max(w),\
-        "n_communities": len(comms),\
-        "largest_comm_size": len(comms[0]),\
-        "largest_comm_density": nx.density(S2.subgraph(comms[0]))
+        "n_communities": len(runs[0]) if runs else 0,\
+        "n_cores": len(cores),\
+        "stocks_in_cores": sum(len(c) for c in cores),
+        "share_in_cores": sum(len(c) for c in cores)/n_stocks,\
+        "largest_core_size": top.get("size", 0),\
+        "largest_core_density": top.get("density", np.nan),\
+        "largest_core_coassign": top.get("coassign", np.nan),\
+        "share_cores_hub_led": (np.mean([s["top1_cov"]>=CONFIG["hub_coverage"] for s in stats])
+                                if stats else np.nan),
     }
 
     return network_row
@@ -80,11 +110,63 @@ def build_community_row(month, m, S2, comms, giant):
     return community_row
 
 
+def build_core_row(month, m, S2, cores, stats, giant):
+    """Helper function to build core rows."""
+    core_row = []
+    linked_row = [{
+        "month_end": month,\
+        "ISIN": s,\
+        "core_id": i,\
+        "core_size": stat["size"],\
+        "core_density": stat["density"],\
+        "core_coassign": stat["coassign"],\
+        "in_giant": s in giant
+        }
+        for i, (c, stat) in enumerate(zip(cores, stats))
+        for s in c]
+    core_row.extend(linked_row)
+    unlinked = set(m.ISIN) - set(S2.nodes)
+    unlinked_rows = [{
+            "month_end": month,\
+            "ISIN": s,\
+            "core_id": -1,\
+            "core_size": 1,\
+            "core_density": np.nan,\
+            "core_assign": np.nan,\
+            "in_giant": False
+        }
+    for s in unlinked]
+    core_row.extend(unlinked_rows)
+
+    return core_row
+
+
+def build_core_summary_row(month, stats):
+    """Helper function to build core summary rows."""
+    return [{
+        "month_end": month, 
+        "core_id": i,\
+        "size": stat["size"],\
+        "n_funds": stat["n_funds"],\
+        "top1_cov": stat["top1_cov"],\
+        "top2_cov": stat["top2_cov"],\
+        "median_shared": stat["median_shared"],\
+        "density": stat["density"],\
+        "coassign": stat["coassign"],\
+        "hub_led": stat["top1_cov"]>=CONFIG["hub_coverage"]
+    } for i, stat in enumerate(stats)]
+
+
+def build_fund_row():
+    """Helper function to build fund rows."""
+    pass
+
+
 def iterate_months(df):
     """Iterate through each month and get monthly network summary data."""
     p = df.copy()
     months = p.month_end.unique()
-    network_rows, community_rows = [], []
+    network_rows, core_rows, core_summary_rows, fund_rows = [], [], [], []
     for month in months:
         m = p[p.month_end==month]
         B, S, S2 = build_network(m, CONFIG["min_shared_holders"])
@@ -97,12 +179,66 @@ def iterate_months(df):
         comms = sorted(nx.community.louvain_communities(S2, weight="weight", seed=CONFIG["louvain_seed"]),\
                        key=len, reverse=True)
         giant = max(nx.connected_components(S2), key=len)
-        network_row = build_network_row(month, m, S2, w, comms, giant)
+        #----------------------------------------------------------------
+        nodes = sorted(S2.nodes)
+        runs = [nx.community.louvain_communities(S2, weight="weight", seed=s)
+                for s in range(CONFIG["n_seed"])]
+        idx = {n:i for i, n in enumerate(nodes)}
+        co = np.zeros((len(nodes), len(nodes)))
+        for r in runs:
+            for c in r:
+                ids = [idx[n] for n in c]
+                co[np.ix_(ids, ids)] += 1
+        co /= len(runs)
+        D = 1-co
+        np.fill_diagonal(D, 0)
+        Z = linkage(squareform(D, checks=False), method="average")
+        lab = fcluster(Z, t=0.2, criterion="distance")
+        cores = [set(np.array(nodes)[lab==k]) for k in np.unique(lab)]
+        cores = sorted([c for c in cores if len(c)>=CONFIG["core_min_size"]], key=len, reverse=True)
+        stats = [core_stats(c, co, idx, S2, m) for c in cores]
+        #----------------------------------------------------------------
+        network_row = build_network_row(month, m, S2, w, runs, cores, stats, giant)
         network_rows.append(network_row)
-        community_row = build_community_row(month, m, S2, comms, giant)
-        community_rows.append(community_row)
+        core_row = build_core_row(month, m, S2, cores, stats, giant)
+        core_rows.append(core_row)
+        core_summary_row = build_core_summary_row(month, stats)
+        core_summary_rows.append(core_summary_row)
+        fund_row = build_fund_row() # TO-DO
+        #----------------------------------------------------------------
+        # community_row = build_community_row(month, m, S2, comms, giant)
+        # community_rows.append(community_row)
 
-    return pd.DataFrame(network_rows), pd.DataFrame(community_rows) 
+    return pd.DataFrame(network_rows), pd.DataFrame(chain.from_iterable(core_rows)),\
+    pd.DataFrame(chain.from_iterable(core_summary_rows)), pd.DataFrame(fund_rows)
+
+
+def assign_track_id(core_df):
+    """Helper function to assign a tracker id for stocks."""
+    members = (core_df[core_df.core_id>=0]\
+               .groupby(["month_end", "core_id"]).ISIN.apply(frozenset))
+    track, next_id = {}, 0
+    prev, prev_track = {}, {}
+    for month in sorted(members.index.get_level_values(0).unique()):
+        cur = members.loc[month].to_dict()
+        cands = sorted(((len(a&b)/len(a|b), cid, pid)\
+                       for cid, a in cur.items() for pid, b in prev.items()),\
+                       reverse=True)
+        mapping, used_c, used_p = {}, set(), set()
+        for j, cid, pid in cands:
+            if j < CONFIG["core_link_jaccard"]:
+                break
+            if cid in used_c or pid in used_p:
+                continue
+            mapping[cid] = prev_track[pid]
+            used_c.add(cid); used_p.add(pid)
+        for cid in cur:
+            if cid not in mapping:
+                mapping[cid] = next_id; next_id+=1
+            track[(month, cid)] = mapping[cid]
+        prev, prev_track = cur, {cid: mapping[cid] for cid in cur}
+
+    return track
 
 
 def main():
@@ -110,27 +246,36 @@ def main():
     panel_base_df = _dfs["base"]
     panel_strict_df = _dfs["strict"]
 
-    network_monthly_base_df, community_base_df = iterate_months(panel_base_df)
-    network_monthly_strict_df, community_strict_df = iterate_months(panel_strict_df)
+    network_monthly_base_df, core_base_df,\
+         core_summary_base_df, fund_base_df = iterate_months(panel_base_df)
+    track = assign_track_id(core_base_df)
+    core_base_df["core_track_id"] = [track.get((m, c), -1) for m, c in zip(core_base_df.month_end, core_base_df.core_id)]
+    core_summary_base_df["core_track_id"] = [track[m, c] for m, c in zip(core_summary_base_df.month_end, core_summary_base_df.core_id)]
+    network_monthly_strict_df, core_strict_df,\
+         core_summary_strict_df, fund_strict_df = iterate_months(panel_strict_df)
+    track = assign_track_id(core_strict_df)
+    core_strict_df["core_track_id"] = [track.get((m, c), -1) for m, c in zip(core_strict_df.month_end, core_strict_df.core_id)]
+    core_summary_strict_df["core_track_id"] = [track[m, c] for m, c in zip(core_summary_strict_df.month_end, core_summary_strict_df.core_id)]
+    
+    # network_monthly_base_df.to_parquet(os.path.join(FOLDER, "network_monthly_base.parquet"), index=False)
+    # network_monthly_strict_df.to_parquet(os.path.join(FOLDER, "network_monthly_strict.parquet"), index=False)
+    #--------------------------------------------------------------------------------------------------------
+    # community_base_df.to_parquet(os.path.join(FOLDER, "community_base.parquet"), index=False)
+    # community_strict_df.to_parquet(os.path.join(FOLDER, "community_strict.parquet"), index=False)
 
-    network_monthly_base_df.to_parquet(os.path.join(FOLDER, "network_monthly_base.parquet"), index=False)
-    network_monthly_strict_df.to_parquet(os.path.join(FOLDER, "network_monthly_strict_df.parquet"), index=False)
-    community_base_df.to_parquet(os.path.join(FOLDER, "community_base.parquet"), index=False)
-    community_strict_df.to_parquet(os.path.join(FOLDER, "community_strict.parquet"), index=False)
-
-    with open("DATA_LOG.md", "a") as log:
-        log.write(f"- {datetime.date.today()} | Monthly network data for (base/strict) is formed |\
-                    n_stocks: number of unique stocks | n_stocks_linked: stocks sharing >= 2 holders with atleast one other stock |\
-                    n_positions: total number of positions | Effective number of holders (n_eff = 1/HHI) |\
-                    giant_size: size of stocks in the biggest group | giant_share: largest group as a share of all shorted stocks |\
-                    giant_density: how tightly linked the largest group is (0 to 1) | median_shared: typical number of shared holders on a link |\
-                    max_shared: the most-shared pair of stocks | n_communities: number of tight groups found by Louvain |\
-                    largest_comm_size: size of stocks in the largest community | largest_comm_density: density of stocks in the largest community\n")
-        log.write(f"- {datetime.date.today()} | Month-ISIN community data for (base/strict) is formed |\
-                    community_id: ID of tight group the ISIN belongs to in month_end (-1 by default) |\
-                    community_size: size of stocks in that community_id (1 by default) |\
-                    community_density: density of stocks in that community_id (Nan by default) |\
-                    in_giant: Whether it's in the largest linked group (False by default)\n")
+    # with open("DATA_LOG.md", "a") as log:
+    #     log.write(f"- {datetime.date.today()} | Monthly network data for (base/strict) is formed |\
+    #                 n_stocks: number of unique stocks | n_stocks_linked: stocks sharing >= 2 holders with atleast one other stock |\
+    #                 n_positions: total number of positions | Effective number of holders (n_eff = 1/HHI) |\
+    #                 giant_size: size of stocks in the biggest group | giant_share: largest group as a share of all shorted stocks |\
+    #                 giant_density: how tightly linked the largest group is (0 to 1) | median_shared: typical number of shared holders on a link |\
+    #                 max_shared: the most-shared pair of stocks | n_communities: number of tight groups found by Louvain |\
+    #                 largest_comm_size: size of stocks in the largest community | largest_comm_density: density of stocks in the largest community\n")
+    #     log.write(f"- {datetime.date.today()} | Month-ISIN community data for (base/strict) is formed |\
+    #                 community_id: ID of tight group the ISIN belongs to in month_end (-1 by default) |\
+    #                 community_size: size of stocks in that community_id (1 by default) |\
+    #                 community_density: density of stocks in that community_id (Nan by default) |\
+    #                 in_giant: Whether it's in the largest linked group (False by default)\n")
 
 
 if __name__=="__main__":

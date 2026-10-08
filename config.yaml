@@ -2,5 +2,9 @@ disclosure_threshold: 0.5
 dormancy_months: 12
 min_shared_holders: 2
 louvain_seed: 42
+n_seed: 50
+hub_coverage: 0.5
+core_min_size: 3
+core_link_jaccard: 0.5
 date_end: 2026-07-10
 panel_variants: [base, strict]
