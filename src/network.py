@@ -11,6 +11,7 @@ import datetime
 from scipy.cluster.hierarchy import linkage, fcluster
 from scipy.spatial.distance import squareform
 from itertools import chain
+import subprocess
 
 
 FOLDER = "data/processed"
@@ -219,7 +220,7 @@ def iterate_months(df):
         D = 1-co
         np.fill_diagonal(D, 0)
         Z = linkage(squareform(D, checks=False), method="average")
-        lab = fcluster(Z, t=0.2, criterion="distance")
+        lab = fcluster(Z, t=CONFIG["core_cut"], criterion="distance")
         cores = [set(np.array(nodes)[lab==k]) for k in np.unique(lab)]
         cores = sorted([c for c in cores if len(c)>=CONFIG["core_min_size"]], key=len, reverse=True)
         stats = [core_stats(c, co, idx, S2, m) for c in cores]
@@ -296,20 +297,37 @@ def main():
     # community_base_df.to_parquet(os.path.join(FOLDER, "community_base.parquet"), index=False)
     # community_strict_df.to_parquet(os.path.join(FOLDER, "community_strict.parquet"), index=False)
 
-    # with open("DATA_LOG.md", "a") as log:
-    #     log.write(f"- {datetime.date.today()} | Monthly network data for (base/strict) is formed |\
-    #                 n_stocks: number of unique stocks | n_stocks_linked: stocks sharing >= 2 holders with atleast one other stock |\
-    #                 n_positions: total number of positions | Effective number of holders (n_eff = 1/HHI) |\
-    #                 giant_size: size of stocks in the biggest group | giant_share: largest group as a share of all shorted stocks |\
-    #                 giant_density: how tightly linked the largest group is (0 to 1) | median_shared: typical number of shared holders on a link |\
-    #                 max_shared: the most-shared pair of stocks | n_communities: number of tight groups found by Louvain |\
-    #                 largest_comm_size: size of stocks in the largest community | largest_comm_density: density of stocks in the largest community\n")
-    #     log.write(f"- {datetime.date.today()} | Month-ISIN community data for (base/strict) is formed |\
-    #                 community_id: ID of tight group the ISIN belongs to in month_end (-1 by default) |\
-    #                 community_size: size of stocks in that community_id (1 by default) |\
-    #                 community_density: density of stocks in that community_id (Nan by default) |\
-    #                 in_giant: Whether it's in the largest linked group (False by default)\n")
+    def log_output(df, path, module, inputs, keys):
+        commit = subprocess.run(["git", "rev-parse", "--short", "HEAD"],
+                                capture_output=True, text=True).stdout.strip()
+        nulls = {c: int(n) for c, n in df.isna().sum().items() if n}
+        params = ", ".join(f"{k}={CONFIG[k]}" for k in keys)
+        with open("DATA_LOG.md", "a") as f:
+            f.write(f"\n### {path}\n- Produced by: {module} | commit {commit} | run {datetime.date.today()}\n"
+                    f"- Inputs: {inputs}\n- Config: {params}\n- Rows: {len(df)}"
+                    f" | months: {df.month_end.min():%Y-%m} to {df.month_end.max():%Y-%m}\n"
+                    f"- Nulls: {nulls or 'none'}\n")
 
+    keys = ["min_shared_holders", "n_seed", "core_cut", "core_min_size", "hub_coverage", "core_link_jaccard"]
+    # base
+    log_output(network_monthly_base_df, "/data/processed/network_monthly_base.parquet", "/src/network.py",\
+               "/data/panel_base.parquet", keys)
+    log_output(core_base_df, "/data/processed/core_base.parquet", "/src/network.py",\
+                   "/data/panel_base.parquet", keys)
+    log_output(core_summary_base_df, "/data/processed/core_summary_base.parquet", "/src/network.py",\
+                       "/data/panel_base.parquet", keys)
+    log_output(fund_base_df, "/data/processed/fund_base.parquet", "/src/network.py",\
+                           "/data/panel_base.parquet", keys)
+    # strict
+    log_output(network_monthly_strict_df, "/data/processed/network_monthly_strict.parquet", "/src/network.py",\
+                   "/data/panel_strict.parquet", keys)
+    log_output(core_strict_df, "/data/processed/core_strict.parquet", "/src/network.py",\
+                    "/data/panel_strict.parquet", keys)
+    log_output(core_summary_strict_df, "/data/processed/core_summary_strict.parquet", "/src/network.py",\
+                        "/data/panel_strict.parquet", keys)
+    log_output(fund_strict_df, "/data/processed/fund_strict.parquet", "/src/network.py",\
+                            "/data/panel_strict.parquet", keys)
+    
 
 if __name__=="__main__":
     main()

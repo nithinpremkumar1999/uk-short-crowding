@@ -8,3 +8,59 @@
 - 2026-09-27 | panel data is differentiated into two                    | only filtering out definitely closed positions | filtering both definitely and probably closed positions
 - 2026-09-27 | aggregate view is formed by taking the aggregate of both panel data based on ISIN and month end 
 - 2026-09-30 | Aggregate crowding data for (base/strict) is formed |                  where s: each holder's share of stock of the total short interest (s=position/total) |                  HHI = sum of s^2 | Effective number of holders (n_eff = 1/HHI) |                  agg_short is the total short interest on a ISIN-month_end combination |                  n_holders is the total number of holders on a ISIN-month_end combination |                  overlap_deg counts how many other ISIN-month_end share atleast two of its holders
+
+### /data/processed/network_monthly_base.parquet
+- Produced by: /src/network.py | commit 50bd5ab | run 2026-10-09
+- Inputs: /data/panel_base.parquet
+- Config: min_shared_holders=2, n_seed=50, core_cut=0.2, core_min_size=3, hub_coverage=0.5, core_link_jaccard=0.5
+- Rows: 164 | months: 2012-11 to 2026-06
+- Nulls: {'largest_core_density': 1, 'largest_core_coassign': 1, 'share_cores_hub_led': 1}
+
+### /data/processed/core_base.parquet
+- Produced by: /src/network.py | commit 50bd5ab | run 2026-10-09
+- Inputs: /data/panel_base.parquet
+- Config: min_shared_holders=2, n_seed=50, core_cut=0.2, core_min_size=3, hub_coverage=0.5, core_link_jaccard=0.5
+- Rows: 26482 | months: 2012-11 to 2026-06
+- Nulls: {'core_density': 19390, 'core_coassign': 19390, 'core_assign': 26482}
+
+### /data/processed/core_summary_base.parquet
+- Produced by: /src/network.py | commit 50bd5ab | run 2026-10-09
+- Inputs: /data/panel_base.parquet
+- Config: min_shared_holders=2, n_seed=50, core_cut=0.2, core_min_size=3, hub_coverage=0.5, core_link_jaccard=0.5
+- Rows: 991 | months: 2012-11 to 2026-06
+- Nulls: none
+
+### /data/processed/fund_base.parquet
+- Produced by: /src/network.py | commit 50bd5ab | run 2026-10-09
+- Inputs: /data/panel_base.parquet
+- Config: min_shared_holders=2, n_seed=50, core_cut=0.2, core_min_size=3, hub_coverage=0.5, core_link_jaccard=0.5
+- Rows: 16310 | months: 2012-11 to 2026-06
+- Nulls: none
+
+### /data/processed/network_monthly_strict.parquet
+- Produced by: /src/network.py | commit 50bd5ab | run 2026-10-09
+- Inputs: /data/panel_strict.parquet
+- Config: min_shared_holders=2, n_seed=50, core_cut=0.2, core_min_size=3, hub_coverage=0.5, core_link_jaccard=0.5
+- Rows: 164 | months: 2012-11 to 2026-06
+- Nulls: {'largest_core_density': 1, 'largest_core_coassign': 1, 'share_cores_hub_led': 1}
+
+### /data/processed/core_strict.parquet
+- Produced by: /src/network.py | commit 50bd5ab | run 2026-10-09
+- Inputs: /data/panel_strict.parquet
+- Config: min_shared_holders=2, n_seed=50, core_cut=0.2, core_min_size=3, hub_coverage=0.5, core_link_jaccard=0.5
+- Rows: 26331 | months: 2012-11 to 2026-06
+- Nulls: {'core_density': 19239, 'core_coassign': 19239, 'core_assign': 26331}
+
+### /data/processed/core_summary_strict.parquet
+- Produced by: /src/network.py | commit 50bd5ab | run 2026-10-09
+- Inputs: /data/panel_strict.parquet
+- Config: min_shared_holders=2, n_seed=50, core_cut=0.2, core_min_size=3, hub_coverage=0.5, core_link_jaccard=0.5
+- Rows: 991 | months: 2012-11 to 2026-06
+- Nulls: none
+
+### /data/processed/fund_strict.parquet
+- Produced by: /src/network.py | commit 50bd5ab | run 2026-10-09
+- Inputs: /data/panel_strict.parquet
+- Config: min_shared_holders=2, n_seed=50, core_cut=0.2, core_min_size=3, hub_coverage=0.5, core_link_jaccard=0.5
+- Rows: 15932 | months: 2012-11 to 2026-06
+- Nulls: none

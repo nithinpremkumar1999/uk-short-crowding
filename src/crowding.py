@@ -9,6 +9,7 @@ import datetime
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 import seaborn as sns
+import subprocess
 
 
 FOLDER = "data/processed"
@@ -37,6 +38,16 @@ def build_aggregate(df):
     ov = (shared[shared.n_shared>=CONFIG["min_shared_holders"]].groupby(["ISIN_x", "month_end"]).size()\
           .reset_index(name="overlap_deg").rename(columns={"ISIN_x":"ISIN"}))
     agg = agg.merge(ov, on=["month_end", "ISIN"], how="left").fillna({"overlap_deg": 0})
+
+    breadth = p.groupby(["month_end", "pos_holder"]).ISIN.nunique().rename("fund_breadth")
+    _p = p.join(breadth, on=["month_end", "pos_holder"], how="left")
+    hub_exposure = _p.groupby(["month_end", "ISIN"]).fund_breadth.max().reset_index(name="hub_exposure")
+    agg = agg.merge(hub_exposure, on=["month_end", "ISIN"], how="left")
+
+    g = agg.groupby("month_end")
+    agg["agg_pct_all"] = g.agg_short.rank(pct=True)
+    three = agg[agg.n_holders>=3] # more than 3 position holders for a ISIN at month_end
+    agg["agg_pct_3plus"] = three.groupby("month_end").agg_short.rank(pct=True)
 
     return agg
 
@@ -134,13 +145,30 @@ def main():
     plot_correlation(agg_base_df, type="base")
     plot_correlation(agg_strict_df, type="strict")
 
-    with open("DATA_LOG.md", "a") as log:
-        log.write(f"- {datetime.date.today()} | Aggregate crowding data for (base/strict) is formed |\
-                  where s: each holder's share of stock of the total short interest (s=position/total) |\
-                  HHI = sum of s^2 | Effective number of holders (n_eff = 1/HHI) |\
-                  agg_short is the total short interest on a ISIN-month_end combination |\
-                  n_holders is the total number of holders on a ISIN-month_end combination |\
-                  overlap_deg counts how many other ISIN-month_end share atleast two of its holders\n")
+    def log_output(df, path, module, inputs, keys):
+        commit = subprocess.run(["git", "rev-parse", "--short", "HEAD"],
+                                capture_output=True, text=True).stdout.strip()
+        nulls = {c: int(n) for c, n in df.isna().sum().items() if n}
+        params = ", ".join(f"{k}={CONFIG[k]}" for k in keys)
+        with open("DATA_LOG.md", "a") as f:
+            f.write(f"\n### {path}\n- Produced by: {module} | commit {commit} | run {datetime.date.today()}\n"
+                    f"- Inputs: {inputs}\n- Config: {params}\n- Rows: {len(df)}"
+                    f" | months: {df.month_end.min():%Y-%m} to {df.month_end.max():%Y-%m}\n"
+                    f"- Nulls: {nulls or 'none'}\n")
+
+    log_output(agg_base_df, "/data/processed/agg_base_crowding.parquet", "src/crowding.py::main",\
+               [f"panel_base.parquet"],\
+               ["disclosure_threshold", "min_shared_holders"])
+    log_output(agg_strict_df, "/data/processed/agg_strict_crowding.parquet", "src/crowding.py::main",\
+               [f"panel_strict.parquet"],\
+               ["disclosure_threshold", "min_shared_holders"])
+    # with open("DATA_LOG.md", "a") as log:
+    #     log.write(f"- {datetime.date.today()} | Aggregate crowding data for (base/strict) is formed |\
+    #               where s: each holder's share of stock of the total short interest (s=position/total) |\
+    #               HHI = sum of s^2 | Effective number of holders (n_eff = 1/HHI) |\
+    #               agg_short is the total short interest on a ISIN-month_end combination |\
+    #               n_holders is the total number of holders on a ISIN-month_end combination |\
+    #               overlap_deg counts how many other ISIN-month_end share atleast two of its holders\n")
     
 
 if __name__=="__main__":

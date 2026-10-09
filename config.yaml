@@ -3,6 +3,7 @@ dormancy_months: 12
 min_shared_holders: 2
 louvain_seed: 42
 n_seed: 50
+core_cut: 0.2
 hub_coverage: 0.5
 core_min_size: 3
 core_link_jaccard: 0.5
