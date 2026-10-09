@@ -81,7 +81,7 @@ def build_network_row(month, m, S2, w, runs, cores, stats, giant):
     return network_row
 
 
-def build_community_row(month, m, S2, comms, giant):
+def build_community_row(month, m, S2, comms, giant): #Depreciated function
     """Helper function to build community row."""
     community_row = []
     linked_row = [{
@@ -157,16 +157,42 @@ def build_core_summary_row(month, stats):
     } for i, stat in enumerate(stats)]
 
 
-def build_fund_row():
+def build_fund_row(month, m, cores):
     """Helper function to build fund rows."""
-    pass
+    f = (m.groupby("pos_holder")\
+            .agg(n_stocks=("ISIN", "nunique"), total_pct=("net_short_pos", "sum"))\
+            .reset_index())
+    core_of = {s: i for i, c in enumerate(cores) for s in c}
+    mm = m.assign(core_id=m.ISIN.map(core_of)).dropna(subset=["core_id"])
+
+    if len(mm):
+        cov = mm.groupby(["pos_holder", "core_id"]).ISIN.nunique().reset_index(name="n_in_core")
+        cov["cov"] = cov.n_in_core/cov.core_id.map(lambda i: len(cores[int(i)]))
+        fc = cov.groupby("pos_holder").agg(
+            n_cores_touched=("core_id", "nunique"),\
+            max_core_cov=("cov", "max"),\
+            n_hub_cores=("cov", lambda x: (x>=CONFIG["hub_coverage"]).sum())
+        ).reset_index()
+        f = f.merge(fc, on="pos_holder", how="left")
+
+    f = f.reindex(columns=[*f.columns,\
+                           *[c for c in ["n_cores_touched", "max_core_cov", "n_hub_cores"]\
+                            if c not in f.columns]])
+    f[["n_cores_touched", "max_core_cov", "n_hub_cores"]] =\
+        (f[["n_cores_touched", "max_core_cov", "n_hub_cores"]].fillna(0))
+    f["is_hub"] = f.n_hub_cores > 0
+    f["month_end"] = month
+
+    return f
 
 
 def iterate_months(df):
     """Iterate through each month and get monthly network summary data."""
     p = df.copy()
     months = p.month_end.unique()
-    network_rows, core_rows, core_summary_rows, fund_rows = [], [], [], []
+    network_rows, core_rows, core_summary_rows = [], [], []
+    fund_df = pd.DataFrame(columns=["month_end", "pos_holder", "n_stocks", "total_pct",\
+                                    "n_cores_touched", "max_core_cov", "n_hub_cores"])
     for month in months:
         m = p[p.month_end==month]
         B, S, S2 = build_network(m, CONFIG["min_shared_holders"])
@@ -204,13 +230,13 @@ def iterate_months(df):
         core_rows.append(core_row)
         core_summary_row = build_core_summary_row(month, stats)
         core_summary_rows.append(core_summary_row)
-        fund_row = build_fund_row() # TO-DO
+        fund_df = pd.concat([fund_df, build_fund_row(month, m, cores)], ignore_index=True)
         #----------------------------------------------------------------
         # community_row = build_community_row(month, m, S2, comms, giant)
         # community_rows.append(community_row)
 
     return pd.DataFrame(network_rows), pd.DataFrame(chain.from_iterable(core_rows)),\
-    pd.DataFrame(chain.from_iterable(core_summary_rows)), pd.DataFrame(fund_rows)
+    pd.DataFrame(chain.from_iterable(core_summary_rows)), fund_df
 
 
 def assign_track_id(core_df):
@@ -245,20 +271,27 @@ def main():
     _dfs = {v: pd.read_parquet(os.path.join(FOLDER, f"panel_{v}.parquet")) for v in VARIANTS}
     panel_base_df = _dfs["base"]
     panel_strict_df = _dfs["strict"]
-
+    # base variant
     network_monthly_base_df, core_base_df,\
          core_summary_base_df, fund_base_df = iterate_months(panel_base_df)
     track = assign_track_id(core_base_df)
     core_base_df["core_track_id"] = [track.get((m, c), -1) for m, c in zip(core_base_df.month_end, core_base_df.core_id)]
     core_summary_base_df["core_track_id"] = [track[m, c] for m, c in zip(core_summary_base_df.month_end, core_summary_base_df.core_id)]
+    # strict variant
     network_monthly_strict_df, core_strict_df,\
          core_summary_strict_df, fund_strict_df = iterate_months(panel_strict_df)
     track = assign_track_id(core_strict_df)
     core_strict_df["core_track_id"] = [track.get((m, c), -1) for m, c in zip(core_strict_df.month_end, core_strict_df.core_id)]
     core_summary_strict_df["core_track_id"] = [track[m, c] for m, c in zip(core_summary_strict_df.month_end, core_summary_strict_df.core_id)]
     
-    # network_monthly_base_df.to_parquet(os.path.join(FOLDER, "network_monthly_base.parquet"), index=False)
-    # network_monthly_strict_df.to_parquet(os.path.join(FOLDER, "network_monthly_strict.parquet"), index=False)
+    network_monthly_base_df.to_parquet(os.path.join(FOLDER, "network_monthly_base.parquet"), index=False)
+    network_monthly_strict_df.to_parquet(os.path.join(FOLDER, "network_monthly_strict.parquet"), index=False)
+    core_base_df.to_parquet(os.path.join(FOLDER, "core_base.parquet"), index=False)
+    core_strict_df.to_parquet(os.path.join(FOLDER, "core_strict.parquet"), index=False)
+    core_summary_base_df.to_parquet(os.path.join(FOLDER, "core_summary_base.parquet"), index=False)
+    core_summary_strict_df.to_parquet(os.path.join(FOLDER, "core_summary_strict.parquet"), index=False)
+    fund_base_df.to_parquet(os.path.join(FOLDER, "fund_base.parquet"), index=False)
+    fund_strict_df.to_parquet(os.path.join(FOLDER, "fund_strict.parquet"), index=False)
     #--------------------------------------------------------------------------------------------------------
     # community_base_df.to_parquet(os.path.join(FOLDER, "community_base.parquet"), index=False)
     # community_strict_df.to_parquet(os.path.join(FOLDER, "community_strict.parquet"), index=False)
