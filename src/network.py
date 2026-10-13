@@ -40,6 +40,7 @@ def core_stats(c, co, idx, S2, m):
     sub = co[np.ix_(ids, ids)]
     mc = m[m.ISIN.isin(c)]
     per_fund = mc.groupby("pos_holder").ISIN.nunique().sort_values(ascending=True)
+    top = per_fund.nlargest(2)
     w = [S2[u][v]["weight"] for u, v in S2.subgraph(c).edges()]
 
     return {
@@ -47,8 +48,8 @@ def core_stats(c, co, idx, S2, m):
         "coassign": sub[np.triu_indices(len(ids), 1)].mean(),\
         "density": nx.density(S2.subgraph(c)),\
         "n_funds": mc.pos_holder.nunique(),\
-        "top1_cov": per_fund.iloc[0]/len(c),\
-        "top2_cov": per_fund.iloc[1]/len(c) if len(per_fund)>1 else 0.0,\
+        "top1_cov": top.iloc[0]/len(c),\
+        "top2_cov": top.iloc[1]/len(c) if len(top)>1 else 0.0,\
         "median_shared": np.median(w) if w else np.nan,
     }
 
@@ -310,23 +311,23 @@ def main():
 
     keys = ["min_shared_holders", "n_seed", "core_cut", "core_min_size", "hub_coverage", "core_link_jaccard"]
     # base
-    log_output(network_monthly_base_df, "/data/processed/network_monthly_base.parquet", "/src/network.py",\
-               "/data/panel_base.parquet", keys)
-    log_output(core_base_df, "/data/processed/core_base.parquet", "/src/network.py",\
-                   "/data/panel_base.parquet", keys)
-    log_output(core_summary_base_df, "/data/processed/core_summary_base.parquet", "/src/network.py",\
-                       "/data/panel_base.parquet", keys)
-    log_output(fund_base_df, "/data/processed/fund_base.parquet", "/src/network.py",\
-                           "/data/panel_base.parquet", keys)
-    # strict
-    log_output(network_monthly_strict_df, "/data/processed/network_monthly_strict.parquet", "/src/network.py",\
-                   "/data/panel_strict.parquet", keys)
-    log_output(core_strict_df, "/data/processed/core_strict.parquet", "/src/network.py",\
-                    "/data/panel_strict.parquet", keys)
-    log_output(core_summary_strict_df, "/data/processed/core_summary_strict.parquet", "/src/network.py",\
-                        "/data/panel_strict.parquet", keys)
-    log_output(fund_strict_df, "/data/processed/fund_strict.parquet", "/src/network.py",\
-                            "/data/panel_strict.parquet", keys)
+    # log_output(network_monthly_base_df, "/data/processed/network_monthly_base.parquet", "/src/network.py",\
+    #            "/data/panel_base.parquet", keys)
+    # log_output(core_base_df, "/data/processed/core_base.parquet", "/src/network.py",\
+    #                "/data/panel_base.parquet", keys)
+    # log_output(core_summary_base_df, "/data/processed/core_summary_base.parquet", "/src/network.py",\
+    #                    "/data/panel_base.parquet", keys)
+    # log_output(fund_base_df, "/data/processed/fund_base.parquet", "/src/network.py",\
+    #                        "/data/panel_base.parquet", keys)
+    # # strict
+    # log_output(network_monthly_strict_df, "/data/processed/network_monthly_strict.parquet", "/src/network.py",\
+    #                "/data/panel_strict.parquet", keys)
+    # log_output(core_strict_df, "/data/processed/core_strict.parquet", "/src/network.py",\
+    #                 "/data/panel_strict.parquet", keys)
+    # log_output(core_summary_strict_df, "/data/processed/core_summary_strict.parquet", "/src/network.py",\
+    #                     "/data/panel_strict.parquet", keys)
+    # log_output(fund_strict_df, "/data/processed/fund_strict.parquet", "/src/network.py",\
+    #                         "/data/panel_strict.parquet", keys)
     
 
 if __name__=="__main__":

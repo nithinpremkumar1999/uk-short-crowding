@@ -7,7 +7,6 @@
 - 2026-09-27 | positions are differentiated into active, probably closed, and definitely closed                    | if last notification from position holder is more than 12 months then it is probably inactive                     | if last notification from ISIN is less than 6 months then it is active                     | manually checked remaining uncertain status to confirm it was active
 - 2026-09-27 | panel data is differentiated into two                    | only filtering out definitely closed positions | filtering both definitely and probably closed positions
 - 2026-09-27 | aggregate view is formed by taking the aggregate of both panel data based on ISIN and month end 
-- 2026-09-30 | Aggregate crowding data for (base/strict) is formed |                  where s: each holder's share of stock of the total short interest (s=position/total) |                  HHI = sum of s^2 | Effective number of holders (n_eff = 1/HHI) |                  agg_short is the total short interest on a ISIN-month_end combination |                  n_holders is the total number of holders on a ISIN-month_end combination |                  overlap_deg counts how many other ISIN-month_end share atleast two of its holders
 
 ### /data/processed/network_monthly_base.parquet
 - Produced by: /src/network.py | commit 50bd5ab | run 2026-10-09
@@ -64,3 +63,17 @@
 - Config: min_shared_holders=2, n_seed=50, core_cut=0.2, core_min_size=3, hub_coverage=0.5, core_link_jaccard=0.5
 - Rows: 15932 | months: 2012-11 to 2026-06
 - Nulls: none
+
+### /data/processed/agg_base_crowding.parquet
+- Produced by: src/crowding.py::main | commit e547561 | run 2026-10-09
+- Inputs: ['panel_base.parquet']
+- Config: disclosure_threshold=0.5, min_shared_holders=2
+- Rows: 27558 | months: 2012-10 to 2026-06
+- Nulls: {'agg_pct_3plus': 20468}
+
+### /data/processed/agg_strict_crowding.parquet
+- Produced by: src/crowding.py::main | commit e547561 | run 2026-10-09
+- Inputs: ['panel_strict.parquet']
+- Config: disclosure_threshold=0.5, min_shared_holders=2
+- Rows: 27407 | months: 2012-10 to 2026-06
+- Nulls: {'agg_pct_3plus': 20382}

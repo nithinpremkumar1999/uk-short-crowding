@@ -52,83 +52,83 @@ def build_aggregate(df):
     return agg
 
 
-def plot_correlation(df, type="base"):
-    """Spearman correlation of number of holder, effective holders, overlap degree."""
-    # Ensure month_end is datetime
-    df = df.copy()
-    df["month_end"] = pd.to_datetime(df["month_end"])
+# def plot_correlation(df, type="base"):
+#     """Spearman correlation of number of holder, effective holders, overlap degree."""
+#     # Ensure month_end is datetime
+#     df = df.copy()
+#     df["month_end"] = pd.to_datetime(df["month_end"])
 
-    rho = df.groupby("month_end").apply(
-        lambda g: g[["agg_short", "n_holders", "n_eff", "overlap_deg"]]
-        .corr("spearman")
-        .loc["agg_short"],
-        include_groups=False,
-    )
-    rho_clean = rho.drop(columns=["agg_short"])
+#     rho = df.groupby("month_end").apply(
+#         lambda g: g[["agg_short", "n_holders", "n_eff", "overlap_deg"]]
+#         .corr("spearman")
+#         .loc["agg_short"],
+#         include_groups=False,
+#     )
+#     rho_clean = rho.drop(columns=["agg_short"])
 
-    rho_long = rho_clean.reset_index().melt(
-        id_vars="month_end", var_name="metric", value_name="spearman_rho"
-    )
-    metric_labels = {
-        "n_holders": "Number of Holders",
-        "n_eff": "Effective Holders (N_eff)",
-        "overlap_deg": "Overlap Degree",
-    }
-    rho_long["metric"] = rho_long["metric"].replace(metric_labels)
+#     rho_long = rho_clean.reset_index().melt(
+#         id_vars="month_end", var_name="metric", value_name="spearman_rho"
+#     )
+#     metric_labels = {
+#         "n_holders": "Number of Holders",
+#         "n_eff": "Effective Holders (N_eff)",
+#         "overlap_deg": "Overlap Degree",
+#     }
+#     rho_long["metric"] = rho_long["metric"].replace(metric_labels)
 
-    sns.set_theme(style="whitegrid", font="sans-serif")
-    fig, ax = plt.subplots(figsize=(10, 4.5), dpi=300)
+#     sns.set_theme(style="whitegrid", font="sans-serif")
+#     fig, ax = plt.subplots(figsize=(10, 4.5), dpi=300)
 
-    palette = sns.color_palette("tab10", n_colors=rho_long["metric"].nunique())
+#     palette = sns.color_palette("tab10", n_colors=rho_long["metric"].nunique())
 
-    # style="metric" uses solid, dashed, and dotted lines so overlapping curves show through
-    sns.lineplot(
-        data=rho_long,
-        x="month_end",
-        y="spearman_rho",
-        hue="metric",
-        palette=palette,
-        linewidth=2.0,
-        alpha=0.85,
-        ax=ax,
-    )
+#     # style="metric" uses solid, dashed, and dotted lines so overlapping curves show through
+#     sns.lineplot(
+#         data=rho_long,
+#         x="month_end",
+#         y="spearman_rho",
+#         hue="metric",
+#         palette=palette,
+#         linewidth=2.0,
+#         alpha=0.85,
+#         ax=ax,
+#     )
 
-    ax.axhline(0, color="grey", linestyle="--", linewidth=0.8, alpha=0.7)
+#     ax.axhline(0, color="grey", linestyle="--", linewidth=0.8, alpha=0.7)
 
-    ax.set_title(
-        f"Spearman Correlation with Aggregate Short Position ({type.capitalize()})",
-        fontsize=12,
-        fontweight="bold",
-        pad=12,
-        loc="left",
-    )
-    ax.set_xlabel("Snapshot Date", fontsize=10, labelpad=8)
-    ax.set_ylabel("Spearman Rank Correlation (ρ)", fontsize=10, labelpad=8)
-    ax.set_ylim(-1.05, 1.05)
+#     ax.set_title(
+#         f"Spearman Correlation with Aggregate Short Position ({type.capitalize()})",
+#         fontsize=12,
+#         fontweight="bold",
+#         pad=12,
+#         loc="left",
+#     )
+#     ax.set_xlabel("Snapshot Date", fontsize=10, labelpad=8)
+#     ax.set_ylabel("Spearman Rank Correlation (ρ)", fontsize=10, labelpad=8)
+#     ax.set_ylim(-1.05, 1.05)
 
-    ax.xaxis.set_major_locator(mdates.YearLocator())
-    ax.xaxis.set_major_formatter(mdates.DateFormatter("%Y"))
-    ax.xaxis.set_minor_locator(mdates.MonthLocator(bymonth=[1, 4, 7, 10]))
+#     ax.xaxis.set_major_locator(mdates.YearLocator())
+#     ax.xaxis.set_major_formatter(mdates.DateFormatter("%Y"))
+#     ax.xaxis.set_minor_locator(mdates.MonthLocator(bymonth=[1, 4, 7, 10]))
 
-    sns.despine(left=True, bottom=False)
+#     sns.despine(left=True, bottom=False)
 
-    ax.legend(
-        title="",
-        frameon=True,
-        facecolor="white",
-        edgecolor="none",
-        loc="upper left",
-        bbox_to_anchor=(1.02, 1),
-    )
+#     ax.legend(
+#         title="",
+#         frameon=True,
+#         facecolor="white",
+#         edgecolor="none",
+#         loc="upper left",
+#         bbox_to_anchor=(1.02, 1),
+#     )
 
-    out_dir = "reports/figures"
-    os.makedirs(out_dir, exist_ok=True)
-    fig.savefig(
-        os.path.join(out_dir, f"correlation_over_time_{type}.png"),
-        bbox_inches="tight",
-        dpi=300,
-    )
-    plt.close(fig)
+#     out_dir = "reports/figures"
+#     os.makedirs(out_dir, exist_ok=True)
+#     fig.savefig(
+#         os.path.join(out_dir, f"correlation_over_time_{type}.png"),
+#         bbox_inches="tight",
+#         dpi=300,
+#     )
+#     plt.close(fig)
 
 
 def main():
@@ -142,8 +142,8 @@ def main():
     agg_base_df.to_parquet(os.path.join(FOLDER, "agg_base_crowding.parquet"), index=False)
     agg_strict_df.to_parquet(os.path.join(FOLDER, "agg_strict_crowding.parquet"), index=False)
 
-    plot_correlation(agg_base_df, type="base")
-    plot_correlation(agg_strict_df, type="strict")
+    # plot_correlation(agg_base_df, type="base")
+    # plot_correlation(agg_strict_df, type="strict")
 
     def log_output(df, path, module, inputs, keys):
         commit = subprocess.run(["git", "rev-parse", "--short", "HEAD"],
